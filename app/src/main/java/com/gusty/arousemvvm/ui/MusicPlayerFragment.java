@@ -40,19 +40,24 @@ public class MusicPlayerFragment extends Fragment {
     private boolean isRotating;
     private RotatingAlbumCover rab;
     private DynamicThemeFromAlbum background;
+    private RecentTracks current;
+    private TrackViewModel viewModel;
 
     //music player service
+    private boolean isBound = false;
     private MusicPlayerService player;
     private ServiceConnection musicServiceConnection = new ServiceConnection() {
         @Override
         public void onServiceConnected(ComponentName name, IBinder service) {
             MusicPlayerService.LocalBinder binder = (MusicPlayerService.LocalBinder) service;
             player = binder.getService();
+            player.passViewModel(viewModel);
+            player.observeLiveData();
         }
 
         @Override
         public void onServiceDisconnected(ComponentName name) {
-
+            player = null;
         }
     };
 
@@ -61,9 +66,27 @@ public class MusicPlayerFragment extends Fragment {
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         isRotating = true;
+        doBindService();
+    }
+
+    private void doBindService() {
         Intent playerIntent = new Intent(getContext(), MusicPlayerService.class);
-        getActivity().startService(playerIntent);
         getActivity().bindService(playerIntent, musicServiceConnection, Context.BIND_AUTO_CREATE);
+        isBound = true;
+    }
+
+    private void doUnbindService() {
+        if (isBound) {
+            getActivity().unbindService(musicServiceConnection);
+            isBound = false;
+            Log.e("test", "service is unbound");
+        }
+    }
+
+    @Override
+    public void onDestroy() {
+        super.onDestroy();
+        doUnbindService();
     }
 
     @Override
@@ -86,9 +109,9 @@ public class MusicPlayerFragment extends Fragment {
     @Override
     public void onActivityCreated(Bundle savedInstanceState) {
         super.onActivityCreated(savedInstanceState);
-
+        Log.e("test", "onActivityCreated");
         TrackViewModel.Factory factory = new TrackViewModel.Factory(getActivity().getApplication());
-        final TrackViewModel viewModel = ViewModelProviders.of(this, factory).get(TrackViewModel.class);
+        viewModel = ViewModelProviders.of(this, factory).get(TrackViewModel.class);
         observeViewModel(viewModel);
     }
 
@@ -96,6 +119,8 @@ public class MusicPlayerFragment extends Fragment {
         viewModel.getObservableProject().observe(this, new Observer<RecentTracks>() {
             @Override
             public void onChanged(RecentTracks recentTracks) {
+                Log.e("test", "on changed being called");
+                current = recentTracks;
                 Bitmap albumart = recentTracks.getRecentTracksInfo().getTracks().get(0).getAlbumArt();
                 String song = recentTracks.getRecentTracksInfo().getTracks().get(0).getName();
                 String artist = recentTracks.getRecentTracksInfo().getTracks().get(0).getArtist().getText();

@@ -7,6 +7,7 @@ import android.app.PendingIntent;
 import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
+import android.graphics.Bitmap;
 import android.media.AudioManager;
 import android.media.MediaPlayer;
 import android.os.Binder;
@@ -17,15 +18,18 @@ import android.util.Log;
 import android.widget.RemoteViews;
 
 import androidx.core.app.NotificationCompat;
+import androidx.lifecycle.LifecycleService;
+import androidx.lifecycle.Observer;
 import androidx.lifecycle.ViewModelProviders;
 
+import com.gusty.arousemvvm.model.RecentTracks;
 import com.gusty.arousemvvm.ui.MainActivity;
 import com.gusty.arousemvvm.utility.Constants;
 import com.gusty.arousemvvm.viewmodel.TrackViewModel;
 
 import java.io.IOException;
 
-public class MusicPlayerService extends Service implements MediaPlayer.OnCompletionListener,
+public class MusicPlayerService extends LifecycleService implements MediaPlayer.OnCompletionListener,
         MediaPlayer.OnPreparedListener, MediaPlayer.OnErrorListener, MediaPlayer.OnSeekCompleteListener,
         MediaPlayer.OnInfoListener, MediaPlayer.OnBufferingUpdateListener, AudioManager.OnAudioFocusChangeListener {
     public static final String CHANNEL_ID = "ArouseMediaPlayer";
@@ -34,6 +38,7 @@ public class MusicPlayerService extends Service implements MediaPlayer.OnComplet
     private String mediaFile;
     private AudioManager audioManager;
     private boolean isPlaying = true;
+    private TrackViewModel viewModel;
 
     @Override
     public void onCreate() {
@@ -42,6 +47,7 @@ public class MusicPlayerService extends Service implements MediaPlayer.OnComplet
 
     @Override
     public IBinder onBind(Intent intent) {
+        super.onBind(intent);
         return iBinder;
     }
 
@@ -61,19 +67,40 @@ public class MusicPlayerService extends Service implements MediaPlayer.OnComplet
         }
 
         initMediaPlayer();
-        RemoteViews rv = new RemoteViews(getPackageName(), R.layout.notification);
         Notification notification = new NotificationCompat.Builder(this, CHANNEL_ID)
-                .setContent(rv)
                 .setContentTitle("Arouse Music Player")
+                .setContentText("Loading Music")
                 .setSmallIcon(R.drawable.music)
-                //todo have a new activity not be created from this
-                .setContentIntent(PendingIntent.getActivity(this, 0, new Intent(this, MainActivity.class), PendingIntent.FLAG_UPDATE_CURRENT))
                 .build();
         startForeground(1123, notification);
         return super.onStartCommand(intent, flags, startId);
     }
 
+    public void passViewModel(TrackViewModel viewModel) {
+        this.viewModel = viewModel;
+    }
 
+    public void observeLiveData() {
+        viewModel.getObservableProject().observe(this, new Observer<RecentTracks>() {
+            @Override
+            public void onChanged(RecentTracks recentTracks) {
+                Log.e("test", "onChanged from player");
+                RemoteViews rv = new RemoteViews(getPackageName(), R.layout.notification);
+                String song = recentTracks.getRecentTracksInfo().getTracks().get(0).getName();
+                String artist = recentTracks.getRecentTracksInfo().getTracks().get(0).getArtist().getText();
+                Bitmap albumArt = recentTracks.getRecentTracksInfo().getTracks().get(0).getAlbumArt();
+                rv.setTextViewText(R.id.song_title_not, song);
+                rv.setTextViewText(R.id.artist_not, artist);
+                rv.setImageViewBitmap(R.id.album_cover_not, albumArt);
+                Notification notification = new NotificationCompat.Builder(getApplicationContext(), CHANNEL_ID)
+                        .setContent(rv)
+                        .setSmallIcon(R.drawable.music)
+                        .build();
+                NotificationManager notificationManager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+                notificationManager.notify(1123, notification);
+            }
+        });
+    }
 
     @Override
     public void onBufferingUpdate(MediaPlayer mp, int percent) {
@@ -199,15 +226,6 @@ public class MusicPlayerService extends Service implements MediaPlayer.OnComplet
         }
     }
 
-    public void pauseMedia() {
-        //hack to keep the stream live
-        mediaPlayer.setVolume(0,0);
-    }
-
-    public void resumeMedia() {
-        //hack to keep the stream live
-        mediaPlayer.setVolume(1,1);
-    }
 
     public void toggleAudio() {
         if (isPlaying) {

@@ -15,6 +15,8 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
         if (savedInstanceState == null) {
+            val playerIntent = Intent(applicationContext, MusicPlayerService::class.java)
+            startService(playerIntent)
             val musicPlayerFragment = MusicPlayerFragment()
             addFragmentToFront(musicPlayerFragment)
         }
@@ -31,10 +33,11 @@ class MainActivity : AppCompatActivity() {
         window.navigationBarColor = color
     }
 
-
     override fun onDestroy() {
         super.onDestroy()
-        val serviceIntent = Intent(this, MusicPlayerService::class.java)
-        stopService(serviceIntent)
+        val playerIntent = Intent(applicationContext, MusicPlayerService::class.java)
+        stopService(playerIntent)
     }
+
+
 }
