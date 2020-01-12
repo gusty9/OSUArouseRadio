@@ -10,10 +10,16 @@ import android.content.Intent;
 import android.graphics.Bitmap;
 import android.media.AudioManager;
 import android.media.MediaPlayer;
+import android.media.session.MediaController;
+import android.media.session.MediaSession;
+import android.media.session.MediaSessionManager;
 import android.os.Binder;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.IBinder;
+import android.os.RemoteException;
+import android.support.v4.media.session.MediaControllerCompat;
+import android.support.v4.media.session.MediaSessionCompat;
 import android.util.Log;
 import android.widget.RemoteViews;
 
@@ -33,12 +39,17 @@ public class MusicPlayerService extends LifecycleService implements MediaPlayer.
         MediaPlayer.OnPreparedListener, MediaPlayer.OnErrorListener, MediaPlayer.OnSeekCompleteListener,
         MediaPlayer.OnInfoListener, MediaPlayer.OnBufferingUpdateListener, AudioManager.OnAudioFocusChangeListener {
     public static final String CHANNEL_ID = "ArouseMediaPlayer";
+    public static final String ACTION_PLAY = "com.gusty.arousemvvm.mediaplayer.ACTION_PLAY";
+    public static final String ACTION_PAUSE = "com.gusty.arousemvvm.mediaplayer.ACTION_PAUSE";
     private final IBinder iBinder = new LocalBinder();
     private MediaPlayer mediaPlayer;
     private String mediaFile;
     private AudioManager audioManager;
     private boolean isPlaying = true;
     private TrackViewModel viewModel;
+    private MediaSessionManager mediaSessionManager;
+    private MediaSessionCompat mediaSession;
+    private MediaControllerCompat.TransportControls transportControls;
 
     @Override
     public void onCreate() {
@@ -57,7 +68,8 @@ public class MusicPlayerService extends LifecycleService implements MediaPlayer.
         createNotificationChannel();
         try {
             mediaFile = Constants.Companion.getMUSIC_ENDPOINT();
-        } catch (NullPointerException e) {
+            initMediaSession();
+        } catch (Exception e) {
             stopSelf();
         }
         //Request audio focus
@@ -85,16 +97,33 @@ public class MusicPlayerService extends LifecycleService implements MediaPlayer.
             @Override
             public void onChanged(RecentTracks recentTracks) {
                 Log.e("test", "onChanged from player");
-                RemoteViews rv = new RemoteViews(getPackageName(), R.layout.notification);
+                //RemoteViews rv = new RemoteViews(getPackageName(), R.layout.notification);
                 String song = recentTracks.getRecentTracksInfo().getTracks().get(0).getName();
                 String artist = recentTracks.getRecentTracksInfo().getTracks().get(0).getArtist().getText();
                 Bitmap albumArt = recentTracks.getRecentTracksInfo().getTracks().get(0).getAlbumArt();
-                rv.setTextViewText(R.id.song_title_not, song);
-                rv.setTextViewText(R.id.artist_not, artist);
-                rv.setImageViewBitmap(R.id.album_cover_not, albumArt);
+//                rv.setTextViewText(R.id.song_title_not, song);
+//                rv.setTextViewText(R.id.artist_not, artist);
+//                rv.setImageViewBitmap(R.id.album_cover_not, albumArt);
+//                Notification notification = new NotificationCompat.Builder(getApplicationContext(), CHANNEL_ID)
+//                        .setContent(rv)
+//                        .setSmallIcon(R.drawable.music)
+//                        .setCategory(NotificationCompat.CATEGORY_SERVICE)
+//                        .build();
+//                NotificationManager notificationManager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+//                notificationManager.notify(1123, notification);
+                //todo get better small icon
+                Intent intent = new Intent(getApplicationContext(), MainActivity.class);
+                PendingIntent pausePendingIntent = PendingIntent.getActivity(getApplicationContext(), 0, intent, 0);
                 Notification notification = new NotificationCompat.Builder(getApplicationContext(), CHANNEL_ID)
-                        .setContent(rv)
+                        .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
                         .setSmallIcon(R.drawable.music)
+                        .addAction(R.drawable.ic_pause, "Pause", pausePendingIntent)
+                        .setStyle(new androidx.media.app.NotificationCompat.MediaStyle()
+                                .setShowActionsInCompactView(0)
+                            .setMediaSession(mediaSession.getSessionToken()))
+                        .setContentTitle(song)
+                        .setContentText(artist)
+                        .setLargeIcon(albumArt)
                         .build();
                 NotificationManager notificationManager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
                 notificationManager.notify(1123, notification);
@@ -257,11 +286,47 @@ public class MusicPlayerService extends LifecycleService implements MediaPlayer.
         mediaPlayer.prepareAsync();
     }
 
+    private void initMediaSession() throws RemoteException {
+        if (mediaSessionManager != null) {
+            return;
+        }
+
+        mediaSessionManager = (MediaSessionManager) getSystemService(Context.MEDIA_SESSION_SERVICE);
+        mediaSession = new MediaSessionCompat(getApplicationContext(), "AudioPlayer");
+        transportControls = mediaSession.getController().getTransportControls();
+        mediaSession.setActive(true);
+        mediaSession.setFlags(MediaSessionCompat.FLAG_HANDLES_TRANSPORT_CONTROLS);
+        mediaSession.setCallback(new MediaSessionCompat.Callback() {
+            @Override
+            public void onPlay() {
+                super.onPlay();
+                toggleAudio();
+                buildNotification(PlaybackStatus.PLAYING);
+            }
+
+            @Override
+            public void onPause() {
+                super.onPause();
+                toggleAudio();
+                buildNotification(PlaybackStatus.PAUSED);
+            }
+        });
+    }
+
+    private void buildNotification(PlaybackStatus playbackStatus) {
+
+    }
+
     private void createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             NotificationChannel serviceChannel = new NotificationChannel(CHANNEL_ID, "Music Player", NotificationManager.IMPORTANCE_DEFAULT);
             NotificationManager manager = getSystemService(NotificationManager.class);
             manager.createNotificationChannel(serviceChannel);
         }
+    }
+
+    public enum PlaybackStatus {
+        PLAYING,
+        PAUSED
     }
 }
