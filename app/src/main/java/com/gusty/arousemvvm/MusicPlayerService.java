@@ -34,13 +34,12 @@ import com.gusty.arousemvvm.utility.Constants;
 import com.gusty.arousemvvm.viewmodel.TrackViewModel;
 
 import java.io.IOException;
-
+//https://www.sitepoint.com/a-step-by-step-guide-to-building-an-android-audio-player-app/
 public class MusicPlayerService extends LifecycleService implements MediaPlayer.OnCompletionListener,
         MediaPlayer.OnPreparedListener, MediaPlayer.OnErrorListener, MediaPlayer.OnSeekCompleteListener,
         MediaPlayer.OnInfoListener, MediaPlayer.OnBufferingUpdateListener, AudioManager.OnAudioFocusChangeListener {
     public static final String CHANNEL_ID = "ArouseMediaPlayer";
-    public static final String ACTION_PLAY = "com.gusty.arousemvvm.mediaplayer.ACTION_PLAY";
-    public static final String ACTION_PAUSE = "com.gusty.arousemvvm.mediaplayer.ACTION_PAUSE";
+    public static final String ACTION_TOGGLE = "com.gusty.arousemvvm.mediaplayer.TOGGLE";
     private final IBinder iBinder = new LocalBinder();
     private MediaPlayer mediaPlayer;
     private String mediaFile;
@@ -50,6 +49,7 @@ public class MusicPlayerService extends LifecycleService implements MediaPlayer.
     private MediaSessionManager mediaSessionManager;
     private MediaSessionCompat mediaSession;
     private MediaControllerCompat.TransportControls transportControls;
+    private RecentTracks currentlyPlaying;
 
     @Override
     public void onCreate() {
@@ -85,6 +85,7 @@ public class MusicPlayerService extends LifecycleService implements MediaPlayer.
                 .setSmallIcon(R.drawable.music)
                 .build();
         startForeground(1123, notification);
+        handleIncomingActions(intent);
         return super.onStartCommand(intent, flags, startId);
     }
 
@@ -96,37 +97,8 @@ public class MusicPlayerService extends LifecycleService implements MediaPlayer.
         viewModel.getObservableProject().observe(this, new Observer<RecentTracks>() {
             @Override
             public void onChanged(RecentTracks recentTracks) {
-                Log.e("test", "onChanged from player");
-                //RemoteViews rv = new RemoteViews(getPackageName(), R.layout.notification);
-                String song = recentTracks.getRecentTracksInfo().getTracks().get(0).getName();
-                String artist = recentTracks.getRecentTracksInfo().getTracks().get(0).getArtist().getText();
-                Bitmap albumArt = recentTracks.getRecentTracksInfo().getTracks().get(0).getAlbumArt();
-//                rv.setTextViewText(R.id.song_title_not, song);
-//                rv.setTextViewText(R.id.artist_not, artist);
-//                rv.setImageViewBitmap(R.id.album_cover_not, albumArt);
-//                Notification notification = new NotificationCompat.Builder(getApplicationContext(), CHANNEL_ID)
-//                        .setContent(rv)
-//                        .setSmallIcon(R.drawable.music)
-//                        .setCategory(NotificationCompat.CATEGORY_SERVICE)
-//                        .build();
-//                NotificationManager notificationManager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
-//                notificationManager.notify(1123, notification);
-                //todo get better small icon
-                Intent intent = new Intent(getApplicationContext(), MainActivity.class);
-                PendingIntent pausePendingIntent = PendingIntent.getActivity(getApplicationContext(), 0, intent, 0);
-                Notification notification = new NotificationCompat.Builder(getApplicationContext(), CHANNEL_ID)
-                        .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-                        .setSmallIcon(R.drawable.music)
-                        .addAction(R.drawable.ic_pause, "Pause", pausePendingIntent)
-                        .setStyle(new androidx.media.app.NotificationCompat.MediaStyle()
-                                .setShowActionsInCompactView(0)
-                            .setMediaSession(mediaSession.getSessionToken()))
-                        .setContentTitle(song)
-                        .setContentText(artist)
-                        .setLargeIcon(albumArt)
-                        .build();
-                NotificationManager notificationManager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
-                notificationManager.notify(1123, notification);
+                currentlyPlaying = recentTracks;
+                buildNotification();
             }
         });
     }
@@ -257,13 +229,19 @@ public class MusicPlayerService extends LifecycleService implements MediaPlayer.
 
 
     public void toggleAudio() {
+        Log.e("test", "audio toggle");
         if (isPlaying) {
-            mediaPlayer.setVolume(0,0);
+            //mediaPlayer.setVolume(0,0);
+            mediaPlayer.pause();
             isPlaying = false;
+            Log.e("test", "audio is going shhhhh");
         } else {
-            mediaPlayer.setVolume(1,1);
+            //mediaPlayer.setVolume(1,1);
+            mediaPlayer.start();
+            Log.e("test", "audio going LOUD");
             isPlaying = true;
         }
+        buildNotification();
     }
 
     private void initMediaPlayer() {
@@ -286,7 +264,7 @@ public class MusicPlayerService extends LifecycleService implements MediaPlayer.
         mediaPlayer.prepareAsync();
     }
 
-    private void initMediaSession() throws RemoteException {
+    private void initMediaSession() {
         if (mediaSessionManager != null) {
             return;
         }
@@ -300,21 +278,60 @@ public class MusicPlayerService extends LifecycleService implements MediaPlayer.
             @Override
             public void onPlay() {
                 super.onPlay();
+                Log.e("test", "onPlay in media session, idfk what this is");
                 toggleAudio();
-                buildNotification(PlaybackStatus.PLAYING);
             }
 
             @Override
             public void onPause() {
                 super.onPause();
+                Log.e("test", "onPause in media session, idfk what this is");
                 toggleAudio();
-                buildNotification(PlaybackStatus.PAUSED);
             }
         });
     }
 
-    private void buildNotification(PlaybackStatus playbackStatus) {
+    private void buildNotification() {
+        Bitmap albumArt = currentlyPlaying.getRecentTracksInfo().getTracks().get(0).getAlbumArt();
+        String song = currentlyPlaying.getRecentTracksInfo().getTracks().get(0).getName();
+        String artist = currentlyPlaying.getRecentTracksInfo().getTracks().get(0).getArtist().getText();
+        Intent intent = new Intent(getApplicationContext(), MusicPlayerService.class);
+        intent.setAction(ACTION_TOGGLE);
+        int action;
+        String actionStr;
+        if (isPlaying) {
+            //build playing pending intent
+            action = android.R.drawable.ic_media_pause;
+            actionStr = "pause";
+        } else {
+            action = android.R.drawable.ic_media_play;
+            actionStr = "play";
+        }
+        PendingIntent pausePendingIntent = PendingIntent.getService(this, 0, intent, 0);
+        Notification notification = new NotificationCompat.Builder(getApplicationContext(), CHANNEL_ID)
+                .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+                .setSmallIcon(R.drawable.music)
+                .setStyle(new androidx.media.app.NotificationCompat.MediaStyle()
+                        .setShowActionsInCompactView(0)
+                        .setMediaSession(mediaSession.getSessionToken()))
+                .addAction(action, actionStr, pausePendingIntent)
+                .setContentTitle(song)
+                .setContentText(artist)
+                .setLargeIcon(albumArt)
+                .build();
+        NotificationManager notificationManager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+        notificationManager.notify(1123, notification);
+    }
 
+    private void handleIncomingActions(Intent playbackAction) {
+        if (playbackAction == null || playbackAction.getAction() == null) {
+            return;
+        }
+        String action = playbackAction.getAction();
+        if (action.equalsIgnoreCase(ACTION_TOGGLE)) {
+            Log.e("test", "toggle audio from notification");
+            toggleAudio();
+        }
     }
 
     private void createNotificationChannel() {
@@ -325,8 +342,4 @@ public class MusicPlayerService extends LifecycleService implements MediaPlayer.
         }
     }
 
-    public enum PlaybackStatus {
-        PLAYING,
-        PAUSED
-    }
 }
