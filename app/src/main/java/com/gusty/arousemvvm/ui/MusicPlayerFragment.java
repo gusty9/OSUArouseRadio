@@ -51,8 +51,7 @@ public class MusicPlayerFragment extends Fragment {
         public void onServiceConnected(ComponentName name, IBinder service) {
             MusicPlayerService.LocalBinder binder = (MusicPlayerService.LocalBinder) service;
             player = binder.getService();
-            player.passViewModel(viewModel);
-            player.observeLiveData();
+
         }
 
         @Override
@@ -79,7 +78,6 @@ public class MusicPlayerFragment extends Fragment {
         if (isBound) {
             getActivity().unbindService(musicServiceConnection);
             isBound = false;
-            Log.e("test", "service is unbound");
         }
     }
 
@@ -109,7 +107,6 @@ public class MusicPlayerFragment extends Fragment {
     @Override
     public void onActivityCreated(Bundle savedInstanceState) {
         super.onActivityCreated(savedInstanceState);
-        Log.e("test", "onActivityCreated");
         TrackViewModel.Factory factory = new TrackViewModel.Factory(getActivity().getApplication());
         viewModel = ViewModelProviders.of(this, factory).get(TrackViewModel.class);
         observeViewModel(viewModel);
@@ -119,7 +116,6 @@ public class MusicPlayerFragment extends Fragment {
         viewModel.getObservableProject().observe(this, new Observer<RecentTracks>() {
             @Override
             public void onChanged(RecentTracks recentTracks) {
-                Log.e("test", "on changed being called");
                 current = recentTracks;
                 Bitmap albumart = recentTracks.getRecentTracksInfo().getTracks().get(0).getAlbumArt();
                 String song = recentTracks.getRecentTracksInfo().getTracks().get(0).getName();
@@ -160,7 +156,7 @@ public class MusicPlayerFragment extends Fragment {
                             rab.pauseAnimation(background.getTriadicColor());
                             isRotating = false;
                         }
-                        player.toggleAudio();
+                        //player.toggleAudio();
                     }
                 });
             }
