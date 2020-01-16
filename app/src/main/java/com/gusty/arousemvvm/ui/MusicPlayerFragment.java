@@ -19,12 +19,13 @@ import androidx.fragment.app.Fragment;
 import androidx.lifecycle.Observer;
 import androidx.lifecycle.ViewModelProviders;
 
+import com.gusty.arousemvvm.FragmentCallback;
 import com.gusty.arousemvvm.MusicPlayerService;
 import com.gusty.arousemvvm.R;
 import com.gusty.arousemvvm.model.RecentTracks;
 import com.gusty.arousemvvm.viewmodel.TrackViewModel;
 
-public class MusicPlayerFragment extends Fragment {
+public class MusicPlayerFragment extends Fragment implements FragmentCallback {
     //VIEWS
     private ImageView albumImageView;
     private TextView songTextView;
@@ -51,7 +52,7 @@ public class MusicPlayerFragment extends Fragment {
         public void onServiceConnected(ComponentName name, IBinder service) {
             MusicPlayerService.LocalBinder binder = (MusicPlayerService.LocalBinder) service;
             player = binder.getService();
-
+            player.passCallback(MusicPlayerFragment.this);
         }
 
         @Override
@@ -101,6 +102,7 @@ public class MusicPlayerFragment extends Fragment {
         artistIcon = v.findViewById(R.id.artist_icon);
         songIcon = v.findViewById(R.id.music_icon);
         albumIcon = v.findViewById(R.id.album_icon);
+        Log.e("test", "fragment on create view");
         return v;
     }
 
@@ -117,48 +119,59 @@ public class MusicPlayerFragment extends Fragment {
             @Override
             public void onChanged(RecentTracks recentTracks) {
                 current = recentTracks;
-                Bitmap albumart = recentTracks.getRecentTracksInfo().getTracks().get(0).getAlbumArt();
-                String song = recentTracks.getRecentTracksInfo().getTracks().get(0).getName();
-                String artist = recentTracks.getRecentTracksInfo().getTracks().get(0).getArtist().getText();
-                String album = recentTracks.getRecentTracksInfo().getTracks().get(0).getAlbum().getText();
-                songTextView.setText(song);
-                artistTextView.setText(artist);
-                albumTextView.setText(album);
-                if (rab != null) {
-                    rab.endAnimation();
-                    rab = null;
-                    albumImageView.setOnClickListener(null);
-                }
-                rab = new RotatingAlbumCover(albumImageView, pausePlayOverlay, albumart, getContext());
-                background = new DynamicThemeFromAlbum(albumart, getContext());
-                if (isRotating) {
-                    if (rab.isStarted()){
+                updateUi();
+            }
+        });
+    }
+
+    /**
+     * update the ui based on the current track playing
+     */
+    private void updateUi() {
+        Log.e("test", "ui is being updated");
+        Bitmap albumart = current.getRecentTracksInfo().getTracks().get(0).getAlbumArt();
+        String song = current.getRecentTracksInfo().getTracks().get(0).getName();
+        String artist = current.getRecentTracksInfo().getTracks().get(0).getArtist().getText();
+        String album = current.getRecentTracksInfo().getTracks().get(0).getAlbum().getText();
+        songTextView.setText(song);
+        artistTextView.setText(artist);
+        albumTextView.setText(album);
+        if (rab != null) {
+            rab.endAnimation();
+            rab = null;
+            albumImageView.setOnClickListener(null);
+        }
+        rab = new RotatingAlbumCover(albumImageView, pausePlayOverlay, albumart, getContext());
+        background = new DynamicThemeFromAlbum(albumart, getContext());
+        if (isRotating) {
+            if (rab.isStarted()){
+                rab.resumeAnimation(background.getTriadicColor());
+            } else {
+                rab.startAnimation(background.getTriadicColor());
+            }
+        } else {
+            rab.pauseAnimation(background.getTriadicColor());
+        }
+        setViewColors(background);
+        backgroundImage.setImageBitmap(background.getBlurredBitmap());
+        //set the album cover click listener
+        albumImageView.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                if (!isRotating) {
+                    if(rab.isStarted()){
                         rab.resumeAnimation(background.getTriadicColor());
-                    } else {
+                    }else{
                         rab.startAnimation(background.getTriadicColor());
                     }
+                    isRotating = true;
                 } else {
                     rab.pauseAnimation(background.getTriadicColor());
+                    isRotating = false;
                 }
-                setViewColors(background);
-                backgroundImage.setImageBitmap(background.getBlurredBitmap());
-                albumImageView.setOnClickListener(new View.OnClickListener() {
-                    @Override
-                    public void onClick(View v) {
-                        if(!isRotating){
-                            if(rab.isStarted()){
-                                rab.resumeAnimation(background.getTriadicColor());
-                            }else{
-                                rab.startAnimation(background.getTriadicColor());
-                            }
-                            isRotating = true;
-                        } else {
-                            rab.pauseAnimation(background.getTriadicColor());
-                            isRotating = false;
-                        }
-                        //player.toggleAudio();
-                    }
-                });
+                if (player != null) {
+                    player.toggleMedia();
+                }
             }
         });
     }
@@ -176,4 +189,14 @@ public class MusicPlayerFragment extends Fragment {
         ((MainActivity) getActivity()).setStatusBarColor(background.getStatusBarColorFromBackground());
     }
 
+
+    @Override
+    public void musicStateChanged(boolean isPlaying) {
+        if (isPlaying) {
+            rab.resumeAnimation(background.getTriadicColor());
+        } else {
+            rab.pauseAnimation(background.getTriadicColor());
+        }
+        isRotating = !isRotating;
+    }
 }

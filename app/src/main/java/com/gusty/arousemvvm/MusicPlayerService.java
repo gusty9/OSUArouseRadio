@@ -48,6 +48,7 @@ public class MusicPlayerService extends LifecycleService implements MediaPlayer.
     private RecentTracks currentlyPlaying;
     private boolean serviceStarted = false;
     private boolean isPlaying;
+    private FragmentCallback fragmentCallback;
 
     //mediasession
     private MediaSessionManager mediaSessionManager;
@@ -267,6 +268,17 @@ public class MusicPlayerService extends LifecycleService implements MediaPlayer.
 
     private void resumeMedia() {
         mediaPlayer.setVolume(1,1);
+        isPlaying = true;
+    }
+
+    //used to toggle media from fragment if the fragment is unsure of the state of the music player
+    public void toggleMedia() {
+        if (isPlaying) {
+            pauseMedia();
+        } else {
+            resumeMedia();
+        }
+        buildNotification(isPlaying);
     }
 
     private BroadcastReceiver becomingNoisyReceiver = new BroadcastReceiver() {
@@ -335,6 +347,7 @@ public class MusicPlayerService extends LifecycleService implements MediaPlayer.
 
                 resumeMedia();
                 buildNotification(isPlaying);
+                fragmentCallback.musicStateChanged(isPlaying);
             }
 
             @Override
@@ -343,6 +356,7 @@ public class MusicPlayerService extends LifecycleService implements MediaPlayer.
 
                 pauseMedia();
                 buildNotification(isPlaying);
+                fragmentCallback.musicStateChanged(isPlaying);
             }
 
             @Override
@@ -451,6 +465,10 @@ public class MusicPlayerService extends LifecycleService implements MediaPlayer.
         }
     }
 
+    public void passCallback(FragmentCallback fragmentCallback) {
+        this.fragmentCallback = fragmentCallback;
+    }
+
 
     private void createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -459,5 +477,4 @@ public class MusicPlayerService extends LifecycleService implements MediaPlayer.
             manager.createNotificationChannel(serviceChannel);
         }
     }
-
 }
