@@ -396,13 +396,13 @@ public class MusicPlayerService extends LifecycleService implements MediaPlayer.
         int notificationAction;
         PendingIntent play_pauseAction;
         if (isPlaying) {
-            notificationAction = android.R.drawable.ic_media_pause;
+            notificationAction = R.drawable.ic_play;
             play_pauseAction = playbackAction(1);
         } else {
-            notificationAction = android.R.drawable.ic_media_play;
+            notificationAction = R.drawable.ic_pause;
             play_pauseAction = playbackAction(0);
         }
-
+        PendingIntent stopServiceIntent = playbackAction(2);
         Bitmap albumArt = currentlyPlaying.getRecentTracksInfo().getTracks().get(0).getAlbumArt();
         String album = currentlyPlaying.getRecentTracksInfo().getTracks().get(0).getAlbum().getText();
         String artist = currentlyPlaying.getRecentTracksInfo().getTracks().get(0).getArtist().getText();
@@ -417,7 +417,8 @@ public class MusicPlayerService extends LifecycleService implements MediaPlayer.
                 .setLargeIcon(albumArt)
                 .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
                 .setSmallIcon(R.drawable.music)
-                .addAction(notificationAction, "pause", play_pauseAction);
+                .addAction(notificationAction, "pause", play_pauseAction)
+                .addAction(R.drawable.x, "stop", stopServiceIntent);
         if (!serviceStarted) {
             startForeground(NOTIFICATION_ID, notificationBuilder.build());
             serviceStarted = true;
@@ -436,6 +437,9 @@ public class MusicPlayerService extends LifecycleService implements MediaPlayer.
             case 1:
                 // Pause
                 playbackAction.setAction(ACTION_PAUSE);
+                return PendingIntent.getService(this, actionNumber, playbackAction, 0);
+            case 2:
+                playbackAction.setAction(ACTION_STOP);
                 return PendingIntent.getService(this, actionNumber, playbackAction, 0);
             default:
                 break;
@@ -462,6 +466,8 @@ public class MusicPlayerService extends LifecycleService implements MediaPlayer.
             isPlaying = false;
         } else if (actionString.equalsIgnoreCase(ACTION_STOP)) {
             transportControls.stop();
+            stopMedia();
+            this.fragmentCallback.finishApp();
         }
     }
 

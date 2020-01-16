@@ -199,4 +199,9 @@ public class MusicPlayerFragment extends Fragment implements FragmentCallback {
         }
         isRotating = !isRotating;
     }
+
+    @Override
+    public void finishApp() {
+        getActivity().finish();
+    }
 }
